@@ -14,6 +14,9 @@ func main() {
 	rPK, rSK := cipher.GenerateKeyPair()
 	iPK, iSK := cipher.GenerateKeyPair()
 
+	// ports to listen by clients. can be any free port
+	var iPort, rPort uint16 = 1563, 1563
+
 	// instantiate discovery
 	dc := disc.NewHTTP("https://messaging.discovery.skywire.skycoin.net")
 
@@ -31,14 +34,27 @@ func main() {
 		log.Fatalf("Error initiating server connections by initiator: %v", err)
 	}
 
+	// bind to port and start listening for incoming messages
+	iListener, err := initiator.Listen(iPort)
+	if err != nil {
+		log.Fatalf("Error listening by initiator on port %d: %v", iPort, err)
+	}
+
+	// bind to port and start listening for incoming messages
+	rListener, err := responder.Listen(rPort)
+	if err != nil {
+		log.Fatalf("Error listening by responder on port %d: %v", rPort, err)
+	}
+
 	// dial responder via DMSG
-	iTp, err := initiator.Dial(context.Background(), rPK)
+	iTp, err := initiator.Dial(context.Background(), rPK, rPort)
 	if err != nil {
 		log.Fatalf("Error dialing responder: %v", err)
 	}
 
-	// accept connection
-	rTp, err := responder.Accept(context.Background())
+	// accept connection. `AcceptTransport` returns an object exposing `transport` features
+	// thus, `Accept` could also be used here returning `net.Conn` interface. depends on your needs
+	rTp, err := rListener.AcceptTransport()
 	if err != nil {
 		log.Fatalf("Error accepting inititator: %v", err)
 	}
@@ -81,6 +97,16 @@ func main() {
 	// close transport
 	if err := rTp.Close(); err != nil {
 		log.Fatalf("Error closing responder's transport: %v", err)
+	}
+
+	// close listener
+	if err := iListener.Close(); err != nil {
+		log.Fatalf("Error closing initiator's listener: %v", err)
+	}
+
+	// close listener
+	if err := rListener.Close(); err != nil {
+		log.Fatalf("Error closing responder's listener: %v", err)
 	}
 
 	// close client
